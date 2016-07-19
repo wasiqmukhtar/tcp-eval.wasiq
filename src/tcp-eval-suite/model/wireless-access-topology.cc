@@ -77,7 +77,8 @@ WirelessAccessTopology::CreateWirelessAcessTopology (np2pLeaf,nWifiLeaf)
   p2pDevices = pointToPoint.Install (p2pNodes);
 
   NodeContainer wifiLeafNodes;
-  wifiStaNodes.Create (nWifiLeaf);
+  wifiLeafNodes.Create (nWifiLeaf);
+  
   NodeContainer wifiApNode = p2pNodes.Get (0);
 
   YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
