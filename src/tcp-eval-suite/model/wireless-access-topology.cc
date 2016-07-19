@@ -113,23 +113,5 @@ WirelessAccessTopology::CreateWirelessAcessTopology (np2pLeaf,nWifiLeaf)
   ipv4.SetBase ("10.1.1.0", "255.255.255.0");
   Ipv4InterfaceContainer i = ipv4.Assign (devices);
 
-
-  MobilityHelper mobility;
-
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (0.0),
-                                 "MinY", DoubleValue (0.0),
-                                 "DeltaX", DoubleValue (5.0),
-                                 "DeltaY", DoubleValue (10.0),
-                                 "GridWidth", UintegerValue (3),
-                                 "LayoutType", StringValue ("RowFirst"));
-
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (wifiLeafNodes);
-
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (wifiApNode);
-
-
 }
 }
