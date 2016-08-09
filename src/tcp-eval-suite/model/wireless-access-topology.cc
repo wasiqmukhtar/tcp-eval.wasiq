@@ -13,17 +13,18 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- * Authors: Wasiq Mukhtar <wasiqmukhtar@gmail.com>
+ * Author: Wasiq Mukhtar <wasiqmukhtar@gmail.com>
  */
 
-// Implement an object to create wireless access topology in tcp-eval.
+// Implement an object to create dumbbell topology in tcp-eval.
 
-#include<iostream>
-#include<cstdlib>
-#include<sstream>
-#include<string>
+#include <iostream>
+#include <cstdlib>
+#include <sstream>
+#include <string>
 
-#include"wireless-acess.h"
+#include "wireless-acess-topology.h"
+#include "eval-stats.h"
 #include "ns3/log.h"
 #include "ns3/simulator.h"
 #include "ns3/core-module.h"
@@ -31,17 +32,20 @@
 #include "ns3/internet-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/applications-module.h"
+#include "wifi-module.h"
+#include "ns3/point-to-point-layout-module.h"
+#include "wireless-dumbbell-helper.h"
 
 namespace ns3 {
 
-NS_LOG_COMPONENT_DEFINE ("WirelessAccessTopology")
+NS_LOG_COMPONENT_DEFINE ("WirelessAccessTopology");
 
 NS_OBJECT_ENSURE_REGISTERED (WirelessAccessTopology);
 
 TypeId
-WirelessAccessTopology::GetTypeId (void)
+DumbbellTopology::GetTypeId (void)
 {
-  static TypeId tid = TypeId("ns3::WirelessAccessTopology")
+  static TypeId tid = TypeId ("ns3::WirelessAccessTopology")
     .SetParent<ConfigureTopology> ()
     .SetGroupName ("TcpEvaluationSuite")
   ;
@@ -56,80 +60,78 @@ WirelessAccessTopology::~WirelessAccessTopology (void)
 {
 }
 
-WirelessAccessTopology::CreateWirelessAcessTopology (np2pLeaf,nWifiLeaf)
+void
+WirelessAccessTopology::CreateWirelessAcessTopology (Ptr<TrafficParameters> traffic, std::string fileName)
 {
+  uint32_t nBottlenecks = 1;
 
-  NodeContainer p2pNodes;
-  p2pNodes.Create (2);
+  // Set default parameters for topology
+  SetTopologyParameters (traffic, nBottlenecks);
 
-  PointToPointHelper pointToPoint;
-  pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
-  pointToPoint.SetChannelAttribute ("Delay", StringValue ("2ms"));
+  uint32_t nFwdFtpFlow = traffic->GetNumOfFwdFtpFlows ();
+  uint32_t nRevFtpFlow = traffic->GetNumOfRevFtpFlows ();
+  uint32_t nVoiceFlow = traffic->GetNumOfVoiceFlows ();
+  uint32_t nFwdStreamingFlow = traffic->GetNumOfFwdStreamingFlows ();
+  uint32_t nRevStreamingFlow = traffic->GetNumOfRevStreamingFlows ();
 
-  NetDeviceContainer p2pDevices;
-  p2pDevices = pointToPoint.Install (p2pNodes);
+  // Calculate total leaf nodes at each side
+  uint32_t nLeftLeaf = nFwdFtpFlow + nRevFtpFlow + nVoiceFlow + nFwdStreamingFlow + nRevStreamingFlow;
+  uint32_t nRightLeaf = nLeftLeaf;
 
-  NodeContainer p2pLeafNodes;
-  p2pLeafNodes.Add (p2pNodes.Get (1));
-  p2pLeafNodes.Create (np2pLeaf);
+  WirelessDumbbellHelper wirelessdumbbell (np2pLeaf,nWifiLeaf);
 
-  NetDeviceContainer p2pDevices;
-  p2pDevices = pointToPoint.Install (p2pNodes);
+  uint32_t offset = 0;
+  Ptr<CreateTraffic> createTraffic = CreateObject<CreateTraffic> ();
+  if (nFwdFtpFlow > 0)
+    {
+      // Create forward FTP traffic
+      createTraffic->CreateFwdFtpTraffic (wirelessdumbbell, nFwdFtpFlow, offset, traffic);
+      offset += nFwdFtpFlow;
+    }
 
-  NodeContainer wifiLeafNodes;
-  wifiStaNodes.Create (nWifiLeaf);
-  NodeContainer wifiApNode = p2pNodes.Get (0);
+  if (nRevFtpFlow > 0)
+    {
+      // Create reverse FTP traffic
+      createTraffic->CreateRevFtpTraffic (wirelessdumbbell, nRevFtpFlow, offset, traffic);
+      offset += nRevFtpFlow;
+    }
+  if (nVoiceFlow > 0)
+    {
+      // Create voice traffic
+      createTraffic->CreateVoiceTraffic (wirelessdumbbell, nVoiceFlow, offset, traffic);
+      offset += nVoiceFlow;
+    }
+  if (nFwdStreamingFlow > 0)
+    {
+      // Create forward streaming traffic
+      createTraffic->CreateFwdStreamingTraffic (wirelessdumbbell, nFwdStreamingFlow, offset, traffic);
+      offset += nFwdStreamingFlow;
+    }
+  if (nRevStreamingFlow > 0)
+    {
+      // Create reverse streaming traffic
+      createTraffic->CreateRevStreamingTraffic (wirelessdumbbell, nRevStreamingFlow, offset, traffic);
+      offset += nRevStreamingFlow;
+    }
 
-  YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
-  YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
-  phy.SetChannel (channel.Create ());
+  Ipv4GlobalRoutingHelper::PopulateRoutingTables ();
 
-  WifiHelper wifi;
-  wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
+  // Push the stats of left most router to a file
+  Ptr<Node> left = wirelessdumbbell.GetLeft ();
+  Ptr<EvalStats> evalStats = CreateObject<EvalStats> (m_bottleneckBandwidth, m_rttp , fileName);
+  evalStats->Install (left, traffic);
 
-  WifiMacHelper mac;
-  Ssid ssid = Ssid ("ns-3-ssid");
-  mac.SetType ("ns3::StaWifiMac",
-               "Ssid", SsidValue (ssid),
-               "ActiveProbing", BooleanValue (false));
-
-  NetDeviceContainer staDevices;
-  staDevices = wifi.Install (phy, mac, wifiStaNodes);
-
-  mac.SetType ("ns3::ApWifiMac",
-               "Ssid", SsidValue (ssid));
-
-  NetDeviceContainer apDevices;
-  apDevices = wifi.Install (phy, mac, wifiApNode);
-
-
-  InternetStackHelper internet;
-  internet.Install (p2pNodes);
-  internet.Install (p2pLeafNodes);
-  internet.Install (wifiLeafNodes);
-
-  Ipv4AddressHelper ipv4;
-  NS_LOG_INFO ("Assign IP Addresses.");
-  ipv4.SetBase ("10.1.1.0", "255.255.255.0");
-  Ipv4InterfaceContainer i = ipv4.Assign (devices);
-
-
-  MobilityHelper mobility;
-
-  mobility.SetPositionAllocator ("ns3::GridPositionAllocator",
-                                 "MinX", DoubleValue (0.0),
-                                 "MinY", DoubleValue (0.0),
-                                 "DeltaX", DoubleValue (5.0),
-                                 "DeltaY", DoubleValue (10.0),
-                                 "GridWidth", UintegerValue (3),
-                                 "LayoutType", StringValue ("RowFirst"));
-
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (wifiLeafNodes);
-
-  mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  mobility.Install (wifiApNode);
-
-
+  Simulator::Stop (Time::FromDouble (((traffic->GetSimulationTime ()).ToDouble (Time::S) + 5), Time::S));
+  Simulator::Run ();
+  Simulator::Destroy ();
 }
+
+template <typename T>
+std::string WirelessAccessTopology::to_string (const T& data)
+{
+  std::ostringstream conv;
+  conv << data;
+  return conv.str ();
+}
+
 }
