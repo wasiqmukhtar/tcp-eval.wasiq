@@ -126,12 +126,70 @@ WirelessAccessTopology::CreateWirelessAcessTopology (Ptr<TrafficParameters> traf
   Simulator::Destroy ();
 }
 
+<<<<<<< HEAD
 template <typename T>
 std::string WirelessAccessTopology::to_string (const T& data)
 {
   std::ostringstream conv;
   conv << data;
   return conv.str ();
+=======
+  NodeContainer p2pNodes;
+  p2pNodes.Create (2);
+
+  PointToPointHelper pointToPoint;
+  pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
+  pointToPoint.SetChannelAttribute ("Delay", StringValue ("2ms"));
+
+  NetDeviceContainer p2pDevices;
+  p2pDevices = pointToPoint.Install (p2pNodes);
+
+  NodeContainer p2pLeafNodes;
+  p2pLeafNodes.Add (p2pNodes.Get (1));
+  p2pLeafNodes.Create (np2pLeaf);
+
+  NetDeviceContainer p2pDevices;
+  p2pDevices = pointToPoint.Install (p2pNodes);
+
+  NodeContainer wifiLeafNodes;
+  wifiLeafNodes.Create (nWifiLeaf);
+  
+  NodeContainer wifiApNode = p2pNodes.Get (0);
+
+  YansWifiChannelHelper channel = YansWifiChannelHelper::Default ();
+  YansWifiPhyHelper phy = YansWifiPhyHelper::Default ();
+  phy.SetChannel (channel.Create ());
+
+  WifiHelper wifi;
+  wifi.SetRemoteStationManager ("ns3::AarfWifiManager");
+
+  WifiMacHelper mac;
+  Ssid ssid = Ssid ("ns-3-ssid");
+  mac.SetType ("ns3::StaWifiMac",
+               "Ssid", SsidValue (ssid),
+               "ActiveProbing", BooleanValue (false));
+
+  NetDeviceContainer staDevices;
+  staDevices = wifi.Install (phy, mac, wifiStaNodes);
+
+  mac.SetType ("ns3::ApWifiMac",
+               "Ssid", SsidValue (ssid));
+
+  NetDeviceContainer apDevices;
+  apDevices = wifi.Install (phy, mac, wifiApNode);
+
+
+  InternetStackHelper internet;
+  internet.Install (p2pNodes);
+  internet.Install (p2pLeafNodes);
+  internet.Install (wifiLeafNodes);
+
+  Ipv4AddressHelper ipv4;
+  NS_LOG_INFO ("Assign IP Addresses.");
+  ipv4.SetBase ("10.1.1.0", "255.255.255.0");
+  Ipv4InterfaceContainer i = ipv4.Assign (devices);
+
+>>>>>>> 48182847c2d8b2fb0ecf0441a2427c31fa668e3b
 }
 
 }
